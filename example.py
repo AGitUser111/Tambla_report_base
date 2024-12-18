@@ -34,8 +34,8 @@ Feel free to change how you handle username and passwords.
 If using python-dotenv:
 1) install the package using pip: pip install python-dotenv
 2) create a .env file (.env is the whole name of the file) that contains the following:
-    TAMBLA_USER=put_your_username_here
-    TAMBLA_PASSWORD=put_your_password_here
+    TAMBLA_USER='put_your_username_here'
+    TAMBLA_PASSWORD='put_your_password_here'
 """
 
 
@@ -85,7 +85,10 @@ class ReportDetails:
 def main():
     load_dotenv(override=True)
     with sync_playwright() as p:
-        browser: Browser = p.chromium.launch(headless=False, slow_mo=1000)
+        browser: Browser = p.chromium.launch(
+            headless=False,
+            slow_mo=1000,
+        )
         context: BrowserContext = browser.new_context()
         page: Page = context.new_page()
 
@@ -110,17 +113,17 @@ def main():
         switch_report_tab(page, tab=ReportTab.TimeAttendance)
         select_report_type(
             page,
-            report_type=ReportType.TotalHoursWorked,
+            report_type=ReportType.ScheduleAndTimeSheetComparison,
         )
-        select_report_format(page, file_format=ReportFormat.EXCEL)
+        select_report_format(page, file_format=ReportFormat.CSV)
         select_date_range(
-            page, start_date=date(2024,12, 2), end_date=date(2024, 12, 8)
+            page, start_date=date(2024, 12, 2), end_date=date(2024, 12, 8)
         )
         # select_org_unit(page, org_units=[OrgUnit.HolyCrossLaundry])
         select_org_template(page, org_template=JoelsOrgTemplates.HolyCrossLaundry)
         click_background(page)
+        select_option_24hr_time(page)
         run_report(page)
-        page.pause()
         if not ResponseCheck.check_response(
             expected_response="Your request is being processed",
         ):
@@ -132,6 +135,20 @@ def main():
         download_report(page, most_recent_report)
 
         browser.close()
+
+
+def select_option_24hr_time(page: Page) -> None:
+    """works for Schedule and timesheet comparison report. Need to investigate the other reports to see if this is the same."""
+    page.locator("#chk24HourTime").locator("..").locator("..").locator(
+        ".iPhoneCheckHandleCenter"
+    ).click()
+
+
+def select_option_multiple_organisation(page: Page) -> None:
+    """works for Schedule and timesheet comparison report. Need to investigate the other reports to see if this is the same."""
+    page.locator("#chkMultipleOrgUnitTask").locator("..").locator("..").locator(
+        ".iPhoneCheckHandleCenter"
+    ).click()
 
 
 def get_report_data(page: Page, report_details: ReportDetails) -> str:
@@ -297,7 +314,7 @@ def select_date_range(page: Page, start_date: date, end_date: date) -> None:
         "div:nth-child(10) > div > .calendar-date > .table-condensed > thead > tr > th:nth-child(2) > .yearselect"
     ).nth(1)
     start_year_element.select_option(str(start_date.year))
-    
+
     start_month_element: Locator = page.locator(
         "div:nth-child(10) > div > .calendar-date > .table-condensed > thead > tr > th:nth-child(2) > .monthselect"
     ).nth(1)
@@ -315,13 +332,12 @@ def select_date_range(page: Page, start_date: date, end_date: date) -> None:
     ][0]
     start_day_element.click()
 
-
     # Gather all of the end date elements
     end_year_element: Locator = page.locator(
         "div:nth-child(10) > div > .calendar-date > .table-condensed > thead > tr > th:nth-child(2) > .yearselect"
     ).nth(1)
     end_year_element.select_option(str(end_date.year))
-    
+
     end_month_element: Locator = page.locator(
         "div:nth-child(10) > div > .calendar-date > .table-condensed > thead > tr > th:nth-child(2) > .monthselect"
     ).nth(1)
