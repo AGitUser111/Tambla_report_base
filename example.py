@@ -1,7 +1,7 @@
 import os
 import time
 from dataclasses import dataclass
-from datetime import date
+from datetime import date, timedelta
 from enum import Enum
 
 from dotenv import load_dotenv
@@ -82,7 +82,7 @@ class ReportDetails:
         self.error_message: str = kwargs.get("ErrorMessage")
 
 
-def main():
+def main(start_date: date, end_date: date) -> None:
     load_dotenv(override=True)
     with sync_playwright() as p:
         browser: Browser = p.chromium.launch(
@@ -113,16 +113,14 @@ def main():
         switch_report_tab(page, tab=ReportTab.TimeAttendance)
         select_report_type(
             page,
-            report_type=ReportType.ScheduleAndTimeSheetComparison,
+            report_type=ReportType.TotalHoursWorked,
         )
-        select_report_format(page, file_format=ReportFormat.CSV)
-        select_date_range(
-            page, start_date=date(2024, 12, 2), end_date=date(2024, 12, 8)
-        )
+        select_report_format(page, file_format=ReportFormat.EXCEL)
+        select_date_range(page, start_date, end_date)
         # select_org_unit(page, org_units=[OrgUnit.HolyCrossLaundry])
-        select_org_template(page, org_template=JoelsOrgTemplates.HolyCrossLaundry)
+        select_org_template(page, org_template=JoelsOrgTemplates.LaundyTransportCOS)
         click_background(page)
-        select_option_24hr_time(page)
+        select_option_include_leave(page)
         run_report(page)
         if not ResponseCheck.check_response(
             expected_response="Your request is being processed",
@@ -132,9 +130,32 @@ def main():
         switch_report_tab(page, tab=ReportTab.Reports)
 
         most_recent_report: ReportDetails = get_report_details(page)
-        download_report(page, most_recent_report)
+        download_report(
+            page,
+            most_recent_report,
+            filepath=f"{str(DatePeriod().previous_week_start).replace('-', '')}-{str(DatePeriod().previous_week_end).replace('-', '')}.{most_recent_report.filetype}",
+        )
 
         browser.close()
+
+
+class DatePeriod:
+    def __init__(self, date: date = date.today()):
+
+        self.current_date = date
+        self.week_start = self.current_date - timedelta(
+            days=self.current_date.weekday()
+        )
+        self.week_end = self.week_start + timedelta(days=6)
+        self.previous_week_start = self.week_start - timedelta(days=7)
+        self.previous_week_end = self.week_end - timedelta(days=7)
+
+
+def select_option_include_leave(page: Page) -> None:
+    """works for Total Worked Hours report. Need to investigate the other reports to see if this is the same."""
+    page.locator("#chkIsLeave").locator("..").locator("..").locator(
+        ".iPhoneCheckHandleCenter"
+    ).click()
 
 
 def select_option_24hr_time(page: Page) -> None:
@@ -247,7 +268,7 @@ def select_org_template(page: Page, org_template: OrgTemplate) -> None:
         raise ValueError(
             "Invalid organisation template provided. Please check the constants file and add your own."
         )
-    page.locator("#ddlOrgProfile").select_option(org_template.value)
+    page.select_option('#ddlOrgProfile', label=org_template.value)
     page.wait_for_load_state("load")
     page.wait_for_load_state("networkidle")
     time.sleep(1)
@@ -335,12 +356,12 @@ def select_date_range(page: Page, start_date: date, end_date: date) -> None:
     # Gather all of the end date elements
     end_year_element: Locator = page.locator(
         "div:nth-child(10) > div > .calendar-date > .table-condensed > thead > tr > th:nth-child(2) > .yearselect"
-    ).nth(1)
+    ).nth(0)
     end_year_element.select_option(str(end_date.year))
 
     end_month_element: Locator = page.locator(
         "div:nth-child(10) > div > .calendar-date > .table-condensed > thead > tr > th:nth-child(2) > .monthselect"
-    ).nth(1)
+    ).nth(0)
     end_month_element.select_option(str(end_date.month - 1))
 
     end_day_elements: list[ElementHandle] = page.locator(
@@ -361,4 +382,20 @@ def select_date_range(page: Page, start_date: date, end_date: date) -> None:
 
 
 if __name__ == "__main__":
-    main()
+    import sys
+    from datetime import datetime
+
+    if len(sys.argv) == 3:
+        start_date = DatePeriod(datetime.strptime(sys.argv[1], "%Y-%m-%d").date())
+        end_date = DatePeriod(datetime.strptime(sys.argv[2], "%Y-%m-%d").date())
+        main(start_date, end_date)
+    elif len(sys.argv) == 1:
+        report_period = DatePeriod(
+            datetime.strptime(
+                input("YYYY-MM-DD: "), "%Y-%m-%d"
+            ).date()
+        )
+        main(report_period.week_start, report_period.week_end)
+        
+    else:
+        print("Usage: python -m example <start_date YYYY-MM-DD> <end_date YYYY-MM-DD>")

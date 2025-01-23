@@ -78,9 +78,10 @@ class OrgTemplate(Enum):
     Here is an example (Take note of "OrgTemplate" being passed in to the example class below.):
 
     class MyOrgTemplates(OrgTemplate):
-        Example0 = "0"
-        Example1 = "1"
+        Example0 = "Example Text 0"
+        Example1 = "Example Text 1"
     """
 
 class JoelsOrgTemplates(OrgTemplate):
-    HolyCrossLaundry = "0"
+    HolyCrossLaundry = "Holy Cross Laundry"
+    LaundyTransportCOS = "Laundry & Transport COS"
